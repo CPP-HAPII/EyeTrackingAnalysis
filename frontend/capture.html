@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Capture &mdash; Eye-Tracking Demo</title>
+  <link rel="stylesheet" href="capture.css" />
+</head>
+<body>
+  <!-- The content the user looks at. Fills the viewport so gaze viewport-
+       coordinates map 1:1 to the content, and the viewer can reproduce it. -->
+  <iframe id="contentFrame" src="sample-page.html" title="Sample content"></iframe>
+
+  <!-- Real-time gaze dot (revealed after calibration) -->
+  <div id="gazeDot"></div>
+
+  <!-- Heads-up display -->
+  <div id="hud">
+    <span id="hudDot" class="dot"></span>
+    <span id="hudStatus">Waiting for consent&hellip;</span>
+    <span id="hudPoints">0 points</span>
+    <button id="finishBtn" disabled>Finish &amp; view heatmap</button>
+  </div>
+
+  <!-- Consent modal -->
+  <div id="consentBackdrop" class="overlay">
+    <div class="modal">
+      <h2>Eye-Tracking Study Consent</h2>
+      <p>
+        This demo uses your webcam and <b>WebGazer</b> to estimate where you look
+        on the page, so it can build an attention heatmap. Your camera feed is
+        processed <b>locally in your browser</b> &mdash; no video or images of your
+        face are uploaded or stored. Only anonymous gaze coordinates are saved.
+        You can stop at any time by closing the tab.
+      </p>
+      <div class="modal-actions">
+        <button id="declineBtn" class="btn btn-secondary">Not now</button>
+        <button id="acceptBtn" class="btn btn-primary">I agree</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Calibration overlay -->
+  <div id="calib" class="overlay">
+    <div class="hint"><b>Calibration:</b> click each dot 5&times; while looking directly at it.</div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script src="eyetracker.js"></script>
+</body>
+</html>

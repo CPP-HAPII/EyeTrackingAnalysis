@@ -1,0 +1,113 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+/* Full-viewport content the user looks at */
+#contentFrame {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+}
+
+/* ——— Real-time gaze dot ——— */
+#gazeDot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;            /* centre on the predicted point */
+  border-radius: 999px;
+  background: rgba(239, 68, 68, .85); /* red */
+  box-shadow: 0 0 0 4px rgba(239,68,68,.25), 0 0 12px rgba(239,68,68,.8);
+  pointer-events: none;               /* never intercepts clicks */
+  z-index: 130;                       /* above HUD, below overlays */
+  display: none;
+  will-change: transform;
+  transition: transform .05s linear;
+}
+#gazeDot.show { display: block; }
+
+/* ——— HUD ——— */
+#hud {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(20, 48, 74, .92);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+#hud .dot {
+  width: 10px; height: 10px; border-radius: 999px;
+  background: #f0b429; display: inline-block;
+}
+#hud .dot.recording { background: #4ade80; animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+#hudPoints { opacity: .85; font-variant-numeric: tabular-nums; }
+#finishBtn {
+  border: 0; border-radius: 999px; padding: 7px 14px;
+  background: #2f6fb0; color: #fff; font-size: 13px; cursor: pointer;
+}
+#finishBtn:disabled { background: #55657a; cursor: not-allowed; opacity: .7; }
+
+/* ——— Overlays (consent + calibration) ——— */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(8, 20, 33, .86);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 18px;
+  color: #fff;
+}
+.overlay.show { display: flex; }
+
+/* Consent modal */
+.modal {
+  background: #fff;
+  color: #1f2933;
+  max-width: 520px;
+  width: min(92vw, 520px);
+  border-radius: 14px;
+  padding: 26px 28px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.modal h2 { font-size: 21px; margin-bottom: 12px; color: #14304a; }
+.modal p { font-size: 15px; line-height: 1.6; color: #52606d; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 22px; }
+.btn { border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; cursor: pointer; }
+.btn-primary { background: #2f6fb0; color: #fff; }
+.btn-secondary { background: #e4e9f0; color: #52606d; }
+
+/* Calibration grid */
+#calib .hint { font-size: 15px; opacity: .92; text-align: center; }
+#calib .grid {
+  width: min(90vw, 900px);
+  height: min(72vh, 620px);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+.target { display: grid; place-items: center; user-select: none; }
+.target > div {
+  width: 20px; height: 20px; border-radius: 999px;
+  background: #fff; opacity: .9;
+  box-shadow: 0 0 0 4px rgba(255,255,255,.25);
+  cursor: pointer; transition: transform .1s;
+}
+.target.done > div {
+  background: #4ade80;
+  box-shadow: 0 0 0 4px rgba(74,222,128,.35);
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heatmap Viewer &mdash; Eye-Tracking Demo</title>
+  <link rel="stylesheet" href="viewer.css" />
+</head>
+<body>
+  <header id="toolbar">
+    <div class="brand">Eye-Tracking Analysis</div>
+    <label>
+      Session
+      <select id="sessionSelect"></select>
+    </label>
+    <button id="showHeatmapBtn" class="btn" disabled>Show heatmap</button>
+    <button id="processBtn" class="btn" disabled>Process fixations</button>
+    <button id="showFixationsBtn" class="btn" disabled>Show fixations</button>
+    <a class="btn btn-ghost" href="capture.html">+ New capture</a>
+    <span id="status"></span>
+  </header>
+
+  <main id="stagePanel">
+    <div id="stage">
+      <iframe id="contentFrame" title="Captured page"></iframe>
+      <div id="overlay"></div>
+    </div>
+    <p id="placeholder">Select a session, then "Show heatmap".</p>
+  </main>
+
+  <script src="heatmap.js"></script>
+</body>
+</html>

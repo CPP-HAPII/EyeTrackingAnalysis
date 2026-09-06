@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sample Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1f2933;
+      background: #f5f7fa;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh;
+    }
+    header {
+      background: #14304a;
+      color: #fff;
+      padding: 22px 40px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 26px; letter-spacing: .3px; }
+    header nav span { margin-left: 26px; font-size: 15px; opacity: .85; }
+    main {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 22px;
+      padding: 28px 40px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 22px 26px;
+      box-shadow: 0 1px 3px rgba(16,42,67,.12);
+      display: flex;
+      flex-direction: column;
+    }
+    .card h2 { font-size: 19px; margin-bottom: 12px; color: #14304a; }
+    .card p { font-size: 15px; line-height: 1.55; color: #52606d; }
+    .hero { grid-row: 1 / span 2; }
+    .hero .big-number { font-size: 64px; font-weight: 700; color: #2f6fb0; margin: 8px 0; }
+    .stat { font-size: 40px; font-weight: 700; color: #2f6fb0; }
+    .swatch {
+      margin-top: auto;
+      height: 46%;
+      border-radius: 8px;
+      background: linear-gradient(120deg, #d7e6f5, #f0d9e6);
+    }
+    footer {
+      background: #e4e9f0;
+      padding: 16px 40px;
+      font-size: 13px;
+      color: #52606d;
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="site-title">Attention Analytics Demo</h1>
+    <nav>
+      <span id="nav-overview">Overview</span>
+      <span id="nav-reports">Reports</span>
+      <span id="nav-about">About</span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card hero" id="card-hero">
+      <h2>Where are you looking?</h2>
+      <p>Read across this page naturally. Your gaze is being recorded so we can
+         build a heatmap of which regions drew the most attention.</p>
+      <div class="big-number" id="hero-number">72%</div>
+      <p>of attention typically lands in the top-left "F-pattern" zone.</p>
+      <div class="swatch" id="hero-swatch"></div>
+    </section>
+
+    <section class="card" id="card-stat-a">
+      <h2>Top-right panel</h2>
+      <div class="stat" id="stat-a">1,284</div>
+      <p>Look here for a moment, then move on.</p>
+    </section>
+
+    <section class="card" id="card-stat-b">
+      <h2>Bottom-right panel</h2>
+      <div class="stat" id="stat-b">36.5s</div>
+      <p>A secondary region to compare fixation density against the hero panel.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span id="footer-left">Eye-Tracking Analysis &mdash; standalone demo</span>
+    <span id="footer-right">WebGazer &middot; heatmap.js &middot; ST-DBSCAN</span>
+  </footer>
+</body>
+</html>

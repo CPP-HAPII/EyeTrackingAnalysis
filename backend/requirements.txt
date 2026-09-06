@@ -1,0 +1,17 @@
+fastapi==0.128.0
+uvicorn==0.40.0
+SQLAlchemy==2.0.48
+greenlet==3.3.2
+aiosqlite==0.20.0
+pydantic==2.12.5
+pandas==2.3.3
+numpy==2.3.3
+scipy==1.16.3
+scikit-learn==1.8.0
+kneed==0.8.5
+natsort==8.4.0
+
+# NOTE: ST-DBSCAN is vendored in utils/st_dbscan.py instead of the PyPI
+# `st_dbscan` package, whose 0.2.3 release ships broken metadata (declares
+# version 0.0.0) that pip/uv reject. The vendored module only needs scipy +
+# scikit-learn, both listed above.

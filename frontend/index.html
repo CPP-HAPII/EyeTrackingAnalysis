@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eye-Tracking Analysis Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #14304a; color: #fff; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .wrap { max-width: 560px; padding: 40px; text-align: center; }
+    h1 { font-size: 34px; margin-bottom: 14px; }
+    p { color: #c7d3e0; line-height: 1.6; margin-bottom: 28px; }
+    .cards { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+    a.card {
+      background: #2f6fb0; color: #fff; text-decoration: none;
+      padding: 20px 26px; border-radius: 12px; min-width: 180px;
+      transition: transform .1s, background .1s;
+    }
+    a.card:hover { transform: translateY(-2px); background: #3a80c8; }
+    a.card b { display: block; font-size: 18px; margin-bottom: 6px; }
+    a.card span { font-size: 13px; opacity: .85; }
+    .steps { margin-top: 34px; font-size: 13px; color: #9fb2c6; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Eye-Tracking Analysis</h1>
+    <p>A standalone WebGazer demo: capture webcam gaze on a sample page, then
+       view an attention heatmap and ST-DBSCAN fixations.</p>
+    <div class="cards">
+      <a class="card" href="capture.html">
+        <b>1 · Capture</b>
+        <span>Consent → calibrate → record your gaze</span>
+      </a>
+      <a class="card" href="viewer.html">
+        <b>2 · View heatmap</b>
+        <span>Raw gaze + processed fixations</span>
+      </a>
+    </div>
+    <p class="steps">Requires a webcam. All camera processing happens locally in your browser.</p>
+  </div>
+</body>
+</html>
