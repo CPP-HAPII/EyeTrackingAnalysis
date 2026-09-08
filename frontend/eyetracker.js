@@ -28,6 +28,13 @@
   const hudPoints = document.getElementById("hudPoints");
   const finishBtn = document.getElementById("finishBtn");
   const gazeDot = document.getElementById("gazeDot");
+  const validate = document.getElementById("validate");
+  const validateHint = document.getElementById("validateHint");
+  const validateDot = document.getElementById("validateDot");
+  const validateResult = document.getElementById("validateResult");
+  const validateScore = document.getElementById("validateScore");
+  const recalibrateBtn = document.getElementById("recalibrateBtn");
+  const startRecordingBtn = document.getElementById("startRecordingBtn");
 
   // State
   let sessionId = null;
@@ -40,6 +47,23 @@
 
   const targets = [];
   const CLICKS_PER_TARGET = 5;
+
+  // Validation: sample the prediction while the user stares at a central dot,
+  // then report mean error so a bad calibration is caught before recording.
+  const VALIDATION_MS = 2500;          // total sampling window
+  const VALIDATION_WARMUP_MS = 600;    // ignore the first moments (eye settling)
+  const VALIDATION_INTERVAL_MS = 50;   // ~20 samples/s
+  // Error thresholds as a fraction of the viewport diagonal.
+  const GOOD_FRAC = 0.06;
+  const FAIR_FRAC = 0.12;
+
+  // 9 calibration positions as viewport percentages. Corners/edges sit close to
+  // the borders (with a small margin) so WebGazer trains where it's weakest.
+  const CALIB_POSITIONS = [
+    [6, 8],  [50, 8],  [94, 8],
+    [6, 50], [50, 50], [94, 50],
+    [6, 92], [50, 92], [94, 92],
+  ];
 
   /* ---------------- consent ---------------- */
 
@@ -106,22 +130,34 @@
     grid.innerHTML = "";
     targets.length = 0;
 
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < CALIB_POSITIONS.length; i++) {
+      const [xPct, yPct] = CALIB_POSITIONS[i];
       const cell = document.createElement("div");
       cell.className = "target";
+      cell.style.left = xPct + "%";
+      cell.style.top = yPct + "%";
       const dot = document.createElement("div");
       cell.appendChild(dot);
       cell.dataset.count = "0";
 
       dot.addEventListener("click", (e) => {
         e.stopPropagation();
+        // Train WebGazer on the dot's true screen position (not the raw cursor
+        // point), so every click is a clean calibration sample.
+        const rect = dot.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        try {
+          window.webgazer.recordScreenPosition(cx, cy, "click");
+        } catch { /* ignore */ }
+
         const c = parseInt(cell.dataset.count, 10) + 1;
         cell.dataset.count = String(c);
         dot.style.transform = "scale(1.25)";
         setTimeout(() => (dot.style.transform = "scale(1)"), 100);
         if (c >= CLICKS_PER_TARGET) cell.classList.add("done");
         if (targets.every((t) => parseInt(t.dataset.count, 10) >= CLICKS_PER_TARGET)) {
-          finishCalibration();
+          startValidation();
         }
       });
 
@@ -130,7 +166,67 @@
     }
   }
 
+  /* ---------------- validation ---------------- */
+
+  // Show the central dot, sample predictions for a couple of seconds, and report
+  // the mean distance from the dot. Lets the user recalibrate before recording.
+  function startValidation() {
+    calib.classList.remove("show");
+    validateResult.classList.remove("show");
+    validateHint.style.visibility = "visible";
+    validate.classList.add("show");
+
+    const rect = validateDot.getBoundingClientRect();
+    const targetX = rect.left + rect.width / 2;
+    const targetY = rect.top + rect.height / 2;
+
+    const samples = [];
+    const startedAt = Date.now();
+    const sampleTimer = window.setInterval(async () => {
+      const elapsed = Date.now() - startedAt;
+      let data = null;
+      try {
+        data = await window.webgazer.getCurrentPrediction();
+      } catch { /* ignore */ }
+      if (elapsed > VALIDATION_WARMUP_MS && data) {
+        samples.push(Math.hypot(data.x - targetX, data.y - targetY));
+      }
+      if (elapsed >= VALIDATION_MS) {
+        clearInterval(sampleTimer);
+        showValidationResult(samples);
+      }
+    }, VALIDATION_INTERVAL_MS);
+  }
+
+  function showValidationResult(samples) {
+    validateHint.style.visibility = "hidden";
+    const diag = Math.hypot(browserWidth, browserHeight);
+
+    let grade, cls, detail;
+    if (samples.length === 0) {
+      grade = "No signal";
+      cls = "poor";
+      detail = "WebGazer couldn't read your gaze. Check lighting and that your face is visible, then recalibrate.";
+    } else {
+      const meanPx = samples.reduce((a, b) => a + b, 0) / samples.length;
+      const frac = meanPx / diag;
+      if (frac <= GOOD_FRAC) { grade = "Good"; cls = "good"; }
+      else if (frac <= FAIR_FRAC) { grade = "Fair"; cls = "fair"; }
+      else { grade = "Poor"; cls = "poor"; }
+      detail = "Average error: ~" + Math.round(meanPx) + " px (" +
+        (frac * 100).toFixed(1) + "% of screen). " +
+        (cls === "good"
+          ? "You're good to go."
+          : "Recalibrate for better results — keep your head still and click each dot while looking right at it.");
+    }
+
+    validateScore.innerHTML =
+      'Calibration accuracy: <span class="grade ' + cls + '">' + grade + "</span><br>" + detail;
+    validateResult.classList.add("show");
+  }
+
   function finishCalibration() {
+    validate.classList.remove("show");
     calib.classList.remove("show");
     calibrationFinish = true;
     hudDot.classList.add("recording");
@@ -196,8 +292,14 @@
         .showFaceOverlay(false)
         .showFaceFeedbackBox(false)
         .showPredictionPoints(false)
+        .applyKalmanFilter(true)   // smooth out prediction jitter
         .setGazeListener(function (data) { moveGazeDot(data); })
         .begin();
+
+      // By default WebGazer trains on every mouse click AND mouse-move, which
+      // biases the model toward the cursor. Drop the global listeners so it only
+      // learns from our deliberate calibration clicks (via recordScreenPosition).
+      try { window.webgazer.removeMouseEventListeners(); } catch { /* ignore */ }
 
       hudStatus.textContent = "Calibrating…";
       calib.classList.add("show");
@@ -222,6 +324,18 @@
   }
 
   /* ---------------- wiring ---------------- */
+
+  startRecordingBtn.addEventListener("click", () => {
+    finishCalibration();
+  });
+
+  recalibrateBtn.addEventListener("click", () => {
+    validate.classList.remove("show");
+    validateResult.classList.remove("show");
+    try { window.webgazer.clearData(); } catch { /* ignore */ }
+    calib.classList.add("show");
+    buildCalibrationGrid();
+  });
 
   finishBtn.addEventListener("click", async () => {
     finishBtn.disabled = true;

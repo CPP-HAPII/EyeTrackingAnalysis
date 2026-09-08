@@ -42,8 +42,26 @@
 
   <!-- Calibration overlay -->
   <div id="calib" class="overlay">
-    <div class="hint"><b>Calibration:</b> click each dot 5&times; while looking directly at it.</div>
+    <div class="hint">
+      <b>Calibration:</b> keep your head still and your eyes fixed on each dot
+      while you click it 5&times;. Do the corners too.
+    </div>
     <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- Validation overlay: measures how accurate the calibration actually is -->
+  <div id="validate" class="overlay">
+    <div class="hint" id="validateHint">
+      <b>Check:</b> stare at the dot in the center without moving your head.
+    </div>
+    <div id="validateDot"></div>
+    <div id="validateResult" class="result">
+      <p id="validateScore"></p>
+      <div class="modal-actions">
+        <button id="recalibrateBtn" class="btn btn-secondary">Recalibrate</button>
+        <button id="startRecordingBtn" class="btn btn-primary">Start recording</button>
+      </div>
+    </div>
   </div>
 
   <script src="eyetracker.js"></script>
