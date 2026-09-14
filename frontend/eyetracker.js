@@ -57,13 +57,33 @@
   const GOOD_FRAC = 0.06;
   const FAIR_FRAC = 0.12;
 
-  // 9 calibration positions as viewport percentages. Corners/edges sit close to
-  // the borders (with a small margin) so WebGazer trains where it's weakest.
-  const CALIB_POSITIONS = [
-    [6, 8],  [50, 8],  [94, 8],
-    [6, 50], [50, 50], [94, 50],
-    [6, 92], [50, 92], [94, 92],
-  ];
+  // Edge margin per axis, scaled to the window's actual pixel size so dots
+  // stay close to the true edge on large screens (where a flat % margin would
+  // leave a big unused pixel gap) without crowding the edge on small ones.
+  const MARGIN_MIN_PX = 24;
+  const MARGIN_MAX_PX = 120;
+  const MARGIN_RATIO = 0.06;
+
+  function marginPercent(dimensionPx) {
+    const marginPx = Math.min(
+      MARGIN_MAX_PX,
+      Math.max(MARGIN_MIN_PX, dimensionPx * MARGIN_RATIO)
+    );
+    return (marginPx / dimensionPx) * 100;
+  }
+
+  // 9 calibration positions as viewport percentages, recomputed against the
+  // current window size so corners/edges sit close to the true border (where
+  // WebGazer trains weakest) regardless of screen size or aspect ratio.
+  function calibPositions() {
+    const mx = marginPercent(window.innerWidth);
+    const my = marginPercent(window.innerHeight);
+    return [
+      [mx, my],       [50, my],       [100 - mx, my],
+      [mx, 50],       [50, 50],       [100 - mx, 50],
+      [mx, 100 - my], [50, 100 - my], [100 - mx, 100 - my],
+    ];
+  }
 
   /* ---------------- consent ---------------- */
 
@@ -130,8 +150,9 @@
     grid.innerHTML = "";
     targets.length = 0;
 
-    for (let i = 0; i < CALIB_POSITIONS.length; i++) {
-      const [xPct, yPct] = CALIB_POSITIONS[i];
+    const positions = calibPositions();
+    for (let i = 0; i < positions.length; i++) {
+      const [xPct, yPct] = positions[i];
       const cell = document.createElement("div");
       cell.className = "target";
       cell.style.left = xPct + "%";
