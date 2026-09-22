@@ -285,6 +285,14 @@
     if (!timeBegin) timeBegin = Date.now();
     const timeElapsed = (Date.now() - timeBegin) / 1000;
 
+    // scroll offset at the moment of this reading
+    const scrollX = document.documentElement.scrollLeft;
+    const scrollY = document.documentElement.scrollTop;
+
+    // convert screen-relative gaze point into full-page (document-absolute) position
+    const x_point = parseInt(data.x + scrollX, 10);
+    const y_point = parseInt(data.y + scrollY, 10);
+
     dataCache.push({
       session_id: sessionId,
       x: parseInt(data.x, 10),
