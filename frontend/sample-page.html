@@ -6,14 +6,12 @@
   <title>Sample Page</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
+    html, body { width: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       color: #1f2933;
       background: #f5f7fa;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      height: 100vh;
+      min-height: 100vh;
     }
     header {
       background: #14304a;
@@ -91,6 +89,38 @@
       <h2>Bottom-right panel</h2>
       <div class="stat" id="stat-b">36.5s</div>
       <p>A secondary region to compare fixation density against the hero panel.</p>
+    </section>
+  </main>
+
+  <main id="scroll-section-1">
+    <section class="card" id="card-scroll-1">
+      <h2>Scroll region 1</h2>
+      <p>Keep scrolling down and looking around — this section exists purely to
+         push the page past one screen so gaze logging can be tested against a
+         non-zero scroll offset.</p>
+      <div class="stat" id="stat-c">512</div>
+    </section>
+    <section class="card" id="card-scroll-2">
+      <h2>Scroll region 2</h2>
+      <p>Look at this panel, then the one beside it, to generate points at a
+         range of scrollY values.</p>
+      <div class="stat" id="stat-d">88%</div>
+    </section>
+  </main>
+
+  <main id="scroll-section-2">
+    <section class="card" id="card-scroll-3">
+      <h2>Scroll region 3 (bottom)</h2>
+      <p>This is near the bottom of the page. If scroll-aware logging works,
+         gaze points recorded here should map to this section's document
+         position, not wherever it happened to render on first paint.</p>
+      <div class="big-number" id="scroll-number">100%</div>
+      <div class="swatch" id="scroll-swatch"></div>
+    </section>
+    <section class="card" id="card-scroll-4">
+      <h2>End of page</h2>
+      <p>If you can read this, you scrolled all the way down.</p>
+      <div class="stat" id="stat-e">Done</div>
     </section>
   </main>
 

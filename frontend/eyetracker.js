@@ -35,6 +35,7 @@
   const validateScore = document.getElementById("validateScore");
   const recalibrateBtn = document.getElementById("recalibrateBtn");
   const startRecordingBtn = document.getElementById("startRecordingBtn");
+  const contentFrame = document.getElementById("contentFrame");
 
   // State
   let sessionId = null;
@@ -202,9 +203,9 @@
     const targetY = rect.top + rect.height / 2;
 
     const samples = [];
-    const startedAt = Date.now();
+    const startAt = Date.now();
     const sampleTimer = window.setInterval(async () => {
-      const elapsed = Date.now() - startedAt;
+      const elapsed = Date.now() - startAt;
       let data = null;
       try {
         data = await window.webgazer.getCurrentPrediction();
@@ -275,6 +276,23 @@
       y < browserHeight - threshold
     );
   }
+  /* ---------------- HTML id ---------------- */
+  
+  function getPointElementId(x, y) {
+    // x/y are viewport-relative. The tracked content lives inside an iframe,
+    // so elementFromPoint on the parent document would only ever resolve to
+    // the iframe itself — translate into the iframe's local coordinates and
+    // query its own document instead.
+    const frameRect = contentFrame.getBoundingClientRect();
+    const doc = contentFrame.contentDocument;
+    if (!doc ||
+        x < frameRect.left || x > frameRect.right ||
+        y < frameRect.top || y > frameRect.bottom) {
+      return "No_element_id";
+    }
+    const el = doc.elementFromPoint(x - frameRect.left, y - frameRect.top);
+    return el ? (el.id || "No_element_id") : "No_element_id";
+  }
 
   async function logPoint() {
     if (!calibrationFinish || sessionId == null) return;
@@ -295,10 +313,10 @@
 
     dataCache.push({
       session_id: sessionId,
-      x: parseInt(data.x, 10),
-      y: parseInt(data.y, 10),
+      x: x_point,
+      y: y_point,
       timestamp: timeElapsed,
-      element: null,
+      element: getPointElementId(data.x, data.y),
       subsection: null,
     });
 
