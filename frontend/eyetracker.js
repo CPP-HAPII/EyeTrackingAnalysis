@@ -11,6 +11,7 @@
 
   const DATAPOINTS_PER_SECOND = 10;
   const MAX_CACHE_SIZE = 20;
+  const FLUSH_INTERVAL_MS = 5000;
   const CONSENT_KEY = "gazeConsent:v1";
   const PAGE_NAME = "sample-page";
 
@@ -45,6 +46,7 @@
   let timeBegin = null;
   let logIntervalId = null;
   let started = false;
+  let flushTimerId = null;
 
   const targets = [];
   const CLICKS_PER_TARGET = 5;
@@ -128,22 +130,27 @@
     sessionId = json.session_id;
   }
 
-  async function flushCache() {
-    if (dataCache.length === 0) return;
-    const batch = dataCache;
-    dataCache = [];
-    try {
-      await fetch("/api/points", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ points: batch }),
-      });
-      pointsStored += batch.length;
-      hudPoints.textContent = pointsStored + " points";
-    } catch (e) {
-      console.error("Failed to store points", e);
+    function flushCache(useBeacon = false) {
+		if (dataCache.length === 0 || sessionId == null) return;
+		const batch = dataCache;
+		dataCache = [];
+
+		if  (useBeacon && navigator.sendBeacon) {
+			const blob = new Blob([JSON.stringify({ points: batch })], { type: "application/json" });
+			const queued = navigator.sendBeacon("/api/points", blob);
+			if (!queued) dataCache = batch.concat(dataCache);	// Put back into cache if refused
+			return;
+		}
+
+		return fetch("/api/points", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ points: batch }),
+		}).then(() => {
+			pointsStored += batch.length;
+			hudPoints.textContent = pointsStored + " points";
+		}).catch((e) => console.error("Failed to store points", e));
     }
-  }
 
   /* ---------------- calibration ---------------- */
 
@@ -353,6 +360,7 @@
       buildCalibrationGrid();
 
       logIntervalId = window.setInterval(logPoint, 1000 / DATAPOINTS_PER_SECOND);
+	  flushTimerId = window.setInterval(() => flushCache(), FLUSH_INTERVAL_MS);
     } catch (e) {
       console.error(e);
       hudStatus.textContent = "Error starting eye tracker";
@@ -361,6 +369,7 @@
 
   function endWebgazer() {
     if (logIntervalId) clearInterval(logIntervalId);
+	if (flushTimerId) clearInterval(flushTimerId);
     try {
       window.webgazer?.pause?.();
       window.webgazer?.clearData?.();
@@ -392,15 +401,13 @@
     window.location.href = "viewer.html?session_id=" + encodeURIComponent(sessionId);
   });
 
-  window.addEventListener("beforeunload", () => {
-    // Best-effort flush of remaining points on tab close.
-    if (dataCache.length && sessionId != null && navigator.sendBeacon) {
-      navigator.sendBeacon(
-        "/api/points",
-        new Blob([JSON.stringify({ points: dataCache })], { type: "application/json" })
-      );
-    }
-    endWebgazer();
+  window.addEventListener("pagehide", () => {
+	flushCache(true);
+	endWebgazer();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+	if (document.hidden) flushCache(true);
   });
 
   acceptBtn.addEventListener("click", () => {

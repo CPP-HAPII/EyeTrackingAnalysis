@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, Integer, Float, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, Integer, Float, ForeignKey, String, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -23,9 +23,13 @@ class GazepointSession(Base):
 class GazepointData(Base):
     __tablename__ = "gazepoint_data"
 
+    __table_args__ = (
+        Index("idx_gaze_session_ts", "session_id", "timestamp"),
+	)
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("gazepoint_sessions.id"), nullable=False, index=True
+        Integer, ForeignKey("gazepoint_sessions.id"), nullable=False
     )
     x: Mapped[float] = mapped_column(Float, nullable=False)
     y: Mapped[float] = mapped_column(Float, nullable=False)

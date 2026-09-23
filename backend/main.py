@@ -27,7 +27,7 @@ sys.path.insert(0, str(UTILS_DIR))
 from fastapi import FastAPI, Depends, HTTPException, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from sqlalchemy import select, func  # noqa: E402
+from sqlalchemy import select, func, insert  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from db.database import get_db, init_db, AsyncSessionLocal  # noqa: E402
@@ -92,22 +92,31 @@ async def store_points(request: Request, db: AsyncSession = Depends(get_db)):
     if not points:
         return {"status": "success", "stored": 0}
 
-    now = datetime.now(timezone.utc)
+    session_ids = {int(p["session_id"]) for p in points}
+    valid_ids = set((await db.execute(
+        select(GazepointSession.id).where(GazepointSession.id.in_(session_ids))
+	)).scalars().all())
+
     rows = [
-        GazepointData(
-            session_id=int(p["session_id"]),
-            x=float(p["x"]),
-            y=float(p["y"]),
-            timestamp=float(p["timestamp"]),
-            element=(p.get("element") or None),
-            subsection=(p.get("subsection") or None),
-            created_at=now,
-        )
+        {
+            "session_id": int(p["session_id"]),
+            "x": float(p["x"]),
+            "y": float(p["y"]),
+            "timestamp": float(p["timestamp"]),
+            "element": p.get("element") or None,
+            "subsection": p.get("subsection") or None,
+		}
         for p in points
-    ]
-    db.add_all(rows)
-    await db.commit()
-    return {"status": "success", "stored": len(rows)}
+        if int(p["session_id"]) in valid_ids
+	]
+    skipped = len(points) - len(rows)
+
+    if rows:
+        for i in range(0, len(rows), 200):
+            await db.execute(insert(GazepointData), rows[i:i + 200])
+        await db.commit()
+
+    return {"status": "success", "stored": len(rows), "skipped": skipped}
 
 
 # --------------------------------------------------------------------------
