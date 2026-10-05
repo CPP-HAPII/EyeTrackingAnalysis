@@ -300,6 +300,22 @@
     const el = doc.elementFromPoint(x - frameRect.left, y - frameRect.top);
     return el ? (el.id || "No_element_id") : "No_element_id";
   }
+  function getFrameScroll() {
+    const win = contentFrame.contentWindow;
+    const doc = contentFrame.contentDocument;
+    if (!win || !doc) return { x: 0, y: 0 };
+
+    let x = win.scrollX || doc.documentElement.scrollLeft || doc.body.scrollLeft || 0;
+    let y = win.scrollY || doc.documentElement.scrollTop || doc.body.scrollTop || 0;
+
+    // fallback: the page might scroll inside an inner container
+    if (y === 0) {
+      for (const el of doc.body.querySelectorAll("*")) {
+        if (el.scrollTop > 0) { x = el.scrollLeft; y = el.scrollTop; break; }
+      }
+    }
+    return { x, y };
+  }
 
   async function logPoint() {
     if (!calibrationFinish || sessionId == null) return;
@@ -311,12 +327,13 @@
     const timeElapsed = (Date.now() - timeBegin) / 1000;
 
     // scroll offset at the moment of this reading
-    const scrollX = document.documentElement.scrollLeft;
-    const scrollY = document.documentElement.scrollTop;
+    const { x: scrollX, y: scrollY } = getFrameScroll();
 
     // convert screen-relative gaze point into full-page (document-absolute) position
-    const x_point = parseInt(data.x + scrollX, 10);
-    const y_point = parseInt(data.y + scrollY, 10);
+    const frameRect = contentFrame.getBoundingClientRect();
+    const x_point = parseInt(data.x - frameRect.left + scrollX, 10);
+    const y_point = parseInt(data.y - frameRect.top + scrollY, 10);
+    console.log("scrollY:", scrollY, "y_point:", y_point);
 
     dataCache.push({
       session_id: sessionId,
