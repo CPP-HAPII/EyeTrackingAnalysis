@@ -56,3 +56,26 @@ body { display: flex; flex-direction: column; height: 100vh; }
   pointer-events: none;
   white-space: nowrap;
 }
+.element-highlight {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid rgba(230,57,70,.85);
+  background: rgba(230,57,70,.18);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.element-highlight .element-count {
+  position: absolute;
+  top: -11px;
+  left: -3px;
+  background: rgba(230,57,70,.95);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+#contentFrame { width: 100%; height: 100%; border: 0; }

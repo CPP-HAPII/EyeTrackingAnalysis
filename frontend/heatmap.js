@@ -13,6 +13,7 @@
   const showHeatmapBtn = document.getElementById("showHeatmapBtn");
   const processBtn = document.getElementById("processBtn");
   const showFixationsBtn = document.getElementById("showFixationsBtn");
+  const showElementsBtn = document.getElementById("showElementsBtn");
   const statusEl = document.getElementById("status");
   const placeholder = document.getElementById("placeholder");
   const stage = document.getElementById("stage");
@@ -23,6 +24,8 @@
   let heatmap = null;
   let sessions = [];
   let currentSession = null;
+  let stageHeight = 0; // full document height of the currently reproduced page
+  let stageReady = Promise.resolve();
 
   function setStatus(msg) { statusEl.textContent = msg || ""; }
 
@@ -79,6 +82,7 @@
     showHeatmapBtn.disabled = !hasSession || currentSession.point_count === 0;
     processBtn.disabled = !hasSession || currentSession.point_count === 0;
     showFixationsBtn.disabled = !hasSession || currentSession.fixation_count === 0;
+    showElementsBtn.disabled = !hasSession || currentSession.fixation_count === 0;
     if (hasSession) setupStage(currentSession);
   }
 
@@ -88,6 +92,16 @@
     const h = session.browser_height || 720;
     stage.style.width = w + "px";
     stage.style.height = h + "px";
+    stageHeight = h;
+    stageReady = new Promise((resolve) =>{
+      contentFrame.onload = () => {
+        const doc = contentFrame.contentDocument;
+        stageHeight = doc ? Math.max(doc.documentElement.scrollHeight, h) : h;
+        stage.style.height = stageHeight + "px";
+        fitStage(w, stageHeight);
+        resolve();
+      };
+    });
     contentFrame.src = "sample-page.html";
     placeholder.style.display = "none";
     stage.classList.add("show");
@@ -115,13 +129,19 @@
 
   function createHeatmap() {
     resetOverlay();
-    heatmap = window.h337.create({
-      container: stage,
-      radius: 70,
-      maxOpacity: 0.6,
-      minOpacity: 0,
-      blur: 0.8,
-    });
+    const w = parseInt(stage.style.width, 10) || currentSession.browser_width || 1280;
+    const doc = contentFrame.contentDocument;
+    const pageH = doc ? Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) : 0;
+    const h = Math.max(stageHeight, pageH, parseInt(stage.style.height, 10) || 0);
+    stage.style.height = h + "px";
+      heatmap = window.h337.create({
+        container: stage,
+        radius: 70,
+        maxOpacity: 0.6,
+        minOpacity: 0,
+        blur: 0.8,
+      });
+      heatmap._renderer.setDimensions(w, h);   // resize the canvas itself
   }
 
   async function showHeatmap() {
@@ -194,13 +214,87 @@
     }
   }
 
+  // Walk up from an element until we find one with an id.
+  // Only elements with an id count as "tagged" regions.
+  function nearestIdAncestor(el) {
+    while (el && el !== el.ownerDocument.documentElement) {
+      if (el.id) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  async function showElements() {
+    if (!currentSession) return;
+    setStatus("Loading fixations…");
+    try {
+      await stageReady;
+      const json = await fetchJSON("/api/fixations?session_id=" + currentSession.id);
+      const fixations = (json.data || []).filter((f) => f.fixation_id >= 0);
+      if (fixations.length === 0) { setStatus("No fixations — process first."); return; }
+
+      const doc = contentFrame.contentDocument;
+      if (!doc) { setStatus("Page not loaded yet — try again in a moment."); return; }
+      const w = currentSession.browser_width || 1280;
+      const h = currentSession.browser_height || 720;
+
+      const hits = new Map(); // element -> {count, duration}
+      let unmatched = 0;
+      for (const f of fixations) {
+        // f.x/f.y were normalized by the capture viewport (browser_width x
+        // browser_height), not the full scrollable page — reconstruct pixels
+        // against the same basis or scrolled fixations land in the wrong spot.
+        const x = Math.round(f.x * w);
+        const y = Math.round(f.y * h);
+        const el = nearestIdAncestor(doc.elementFromPoint(x, y));
+        if (!el) { unmatched++; continue; }
+        const entry = hits.get(el) || { count: 0, duration: 0 };
+        entry.count += 1;
+        entry.duration += Math.max(1, f.duration);
+        hits.set(el, entry);
+      }
+
+      resetOverlay();
+      if (hits.size === 0) {
+        setStatus("No fixations landed on a tagged element.");
+        return;
+      }
+
+      const maxCount = Math.max.apply(null, Array.from(hits.values()).map((v) => v.count));
+      hits.forEach((entry, el) => {
+        const rect = el.getBoundingClientRect();
+        const box = document.createElement("div");
+        box.className = "element-highlight";
+        box.style.left = rect.left + "px";
+        box.style.top = rect.top + "px";
+        box.style.width = rect.width + "px";
+        box.style.height = rect.height + "px";
+        box.style.opacity = String(Math.max(0.25, entry.count / maxCount));
+
+        const label = document.createElement("span");
+        label.className = "element-count";
+        label.textContent = "#" + el.id + " · " + entry.count;
+        box.appendChild(label);
+        overlay.appendChild(box);
+      });
+
+      setStatus(
+        fixations.length + " fixations → " + hits.size + " elements" +
+        (unmatched ? " (" + unmatched + " untagged)" : "") + "."
+      );
+    } catch (e) {
+      setStatus("Error: " + e.message);
+    }
+  }
+
   // Wiring
   sessionSelect.addEventListener("change", onSessionChange);
   showHeatmapBtn.addEventListener("click", showHeatmap);
   showFixationsBtn.addEventListener("click", showFixations);
   processBtn.addEventListener("click", processFixations);
+  showElementsBtn.addEventListener("click", showElements);
   window.addEventListener("resize", () => {
-    if (currentSession) fitStage(currentSession.browser_width || 1280, currentSession.browser_height || 720);
+    if (currentSession) fitStage(currentSession.browser_width || 1280, stageHeight || currentSession.browser_height || 720);
   });
 
   (async function init() {
