@@ -31,7 +31,7 @@ from sqlalchemy import select, func, insert  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from db.database import get_db, init_db, AsyncSessionLocal  # noqa: E402
-from db.models import GazepointSession, GazepointData, Fixation  # noqa: E402
+from db.models import GazepointSession, GazepointData, Fixation, ValidationPoint  # noqa: E402
 
 # Minimum gaze points needed for the clustering pipeline to find a knee/fixations.
 MIN_POINTS_FOR_FIXATIONS = 40
@@ -82,6 +82,43 @@ async def create_session(request: Request, db: AsyncSession = Depends(get_db)):
     # response is sent, which races with the client's next request.
     await db.commit()
     return {"status": "success", "session_id": session.id}
+
+
+@app.post("/api/validation")
+async def store_validation(request: Request, db: AsyncSession = Depends(get_db)):
+    """Store the per-point accuracy of one post-calibration validation run.
+
+    Body: {session_id, attempt, points: [{point_index, target_x, target_y,
+    mean_error_px, sample_count}]}. mean_error_px is null for a point where
+    no gaze prediction was available.
+    """
+    body = await request.json()
+    if body.get("session_id") is None:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    session_id = int(body["session_id"])
+    if not await db.get(GazepointSession, session_id):
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+    now = datetime.now(timezone.utc)
+    attempt = int(body.get("attempt") or 1)
+    rows = [
+        ValidationPoint(
+            session_id=session_id,
+            attempt=attempt,
+            point_index=int(p["point_index"]),
+            target_x=float(p["target_x"]),
+            target_y=float(p["target_y"]),
+            mean_error_px=(
+                float(p["mean_error_px"]) if p.get("mean_error_px") is not None else None
+            ),
+            sample_count=int(p.get("sample_count") or 0),
+            created_at=now,
+        )
+        for p in body.get("points", [])
+    ]
+    db.add_all(rows)
+    await db.commit()
+    return {"status": "success", "stored": len(rows)}
 
 
 @app.post("/api/points")

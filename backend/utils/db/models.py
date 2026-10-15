@@ -43,6 +43,29 @@ class GazepointData(Base):
     )
 
 
+class ValidationPoint(Base):
+    """Accuracy of one evaluation point from the post-calibration check: the
+    mean distance (px) between the point and the gaze predictions sampled
+    while the participant looked at it. A session has one row per point per
+    attempt; recalibrating adds a new attempt, and the highest attempt is the
+    calibration the recording was made with.
+    """
+    __tablename__ = "validation_points"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("gazepoint_sessions.id"), nullable=False, index=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    point_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_x: Mapped[float] = mapped_column(Float, nullable=False)
+    target_y: Mapped[float] = mapped_column(Float, nullable=False)
+    # NULL when no gaze prediction was available while the point was shown.
+    mean_error_px: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class Fixation(Base):
     __tablename__ = "fixation_points"
 

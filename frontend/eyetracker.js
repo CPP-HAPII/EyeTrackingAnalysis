@@ -1,7 +1,8 @@
 /*
  * Standalone WebGazer capture.
  *
- * Flow: consent -> load WebGazer -> create session -> 9-point calibration ->
+ * Flow: consent -> load WebGazer -> start camera -> create session ->
+ * face positioning -> 18-point calibration -> 18-point validation ->
  * poll gaze predictions -> batch-POST to the backend. Coordinates are stored in
  * viewport pixels; because the content fills the viewport, they map 1:1 to the
  * page the viewer will reproduce.
@@ -14,6 +15,7 @@
   const FLUSH_INTERVAL_MS = 5000;
   const CONSENT_KEY = "gazeConsent:v1";
   const PAGE_NAME = "sample-page";
+  const CAMERA_START_TIMEOUT_MS = 30000;
 
   const browserWidth = window.innerWidth;
   const browserHeight = window.innerHeight;
@@ -22,6 +24,12 @@
   const consentBackdrop = document.getElementById("consentBackdrop");
   const acceptBtn = document.getElementById("acceptBtn");
   const declineBtn = document.getElementById("declineBtn");
+  const cameraErrorBackdrop = document.getElementById("cameraErrorBackdrop");
+  const cameraErrorText = document.getElementById("cameraErrorText");
+  const cameraRetryBtn = document.getElementById("cameraRetryBtn");
+  const position = document.getElementById("position");
+  const previewSlot = document.getElementById("previewSlot");
+  const positionDoneBtn = document.getElementById("positionDoneBtn");
   const calib = document.getElementById("calib");
   const grid = document.getElementById("grid");
   const hudDot = document.getElementById("hudDot");
@@ -40,6 +48,7 @@
 
   // State
   let sessionId = null;
+  let validationAttempt = 0;   // counts validation runs (recalibration repeats it)
   let dataCache = [];
   let pointsStored = 0;
   let calibrationFinish = false;
@@ -49,12 +58,15 @@
   let flushTimerId = null;
 
   const targets = [];
+  // Each click adds one training sample for that screen position; 5 per point
+  // is what WebGazer's own calibration uses.
   const CLICKS_PER_TARGET = 5;
 
-  // Validation: sample the prediction while the user stares at a central dot,
-  // then report mean error so a bad calibration is caught before recording.
-  const VALIDATION_MS = 2500;          // total sampling window
-  const VALIDATION_WARMUP_MS = 600;    // ignore the first moments (eye settling)
+  // Validation: show each evaluation point in turn, sample the prediction
+  // while the user stares at it, and report the error so a bad calibration is
+  // caught before recording. Per-point results are stored with the session.
+  const VALIDATION_POINT_MS = 3000;    // how long each evaluation point is shown
+  const VALIDATION_WARMUP_MS = 800;    // ignore the eye travelling to the point
   const VALIDATION_INTERVAL_MS = 50;   // ~20 samples/s
   // Error thresholds as a fraction of the viewport diagonal.
   const GOOD_FRAC = 0.06;
@@ -75,17 +87,23 @@
     return (marginPx / dimensionPx) * 100;
   }
 
-  // 9 calibration positions as viewport percentages, recomputed against the
-  // current window size so corners/edges sit close to the true border (where
-  // WebGazer trains weakest) regardless of screen size or aspect ratio.
+  // 18 calibration/evaluation positions (6 x 3 grid) as viewport percentages,
+  // following Psarra et al. (J. Eye Mov. Res. 2026, 19, 99), where the 18-18
+  // fixed layout gave the lowest error. Recomputed against the current window
+  // size so corners/edges sit close to the true border (where WebGazer trains
+  // weakest) regardless of screen size or aspect ratio. The 6 columns are
+  // evenly spaced between the left and right margins.
+  const GRID_COLUMNS = 6;
+
   function calibPositions() {
     const mx = marginPercent(window.innerWidth);
     const my = marginPercent(window.innerHeight);
-    return [
-      [mx, my],       [50, my],       [100 - mx, my],
-      [mx, 50],       [50, 50],       [100 - mx, 50],
-      [mx, 100 - my], [50, 100 - my], [100 - mx, 100 - my],
-    ];
+    const columns = [];
+    for (let c = 0; c < GRID_COLUMNS; c++) {
+      columns.push(mx + (c * (100 - 2 * mx)) / (GRID_COLUMNS - 1));
+    }
+    const rows = [my, 50, 100 - my];
+    return rows.flatMap((y) => columns.map((x) => [x, y]));
   }
 
   /* ---------------- consent ---------------- */
@@ -112,6 +130,25 @@
       script.onerror = () => reject(new Error("Failed to load WebGazer"));
       document.head.appendChild(script);
     });
+  }
+
+  // Block the page with a plain-language reason when the webcam can't start
+  // (error names are the standard getUserMedia ones).
+  function showCameraError(e) {
+    const name = e && e.name;
+    let msg;
+    if (name === "NotAllowedError") {
+      msg = "Camera access is blocked for this site. Allow the camera in your browser's address bar, then try again.";
+    } else if (name === "NotFoundError") {
+      msg = "No camera was found on this device.";
+    } else if (name === "NotReadableError") {
+      msg = "The camera is being used by another app or browser tab. Close it, then try again.";
+    } else {
+      msg = "The camera did not start. Allow camera access if asked, close other apps using the camera, then try again.";
+    }
+    hudStatus.textContent = "Camera unavailable";
+    cameraErrorText.textContent = msg;
+    cameraErrorBackdrop.classList.add("show");
   }
 
   /* ---------------- backend calls ---------------- */
@@ -152,6 +189,58 @@
 		}).catch((e) => console.error("Failed to store points", e));
     }
 
+  // Save the per-point accuracy of one validation run. Best-effort: a failed
+  // save must not stop the participant from starting.
+  async function storeValidation(points) {
+    if (sessionId == null) return;
+    try {
+      await fetch("/api/validation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, attempt: validationAttempt, points }),
+      });
+    } catch (e) {
+      console.error("Failed to store validation", e);
+    }
+  }
+
+  /* ---------------- face positioning ---------------- */
+
+  // Before calibrating, show WebGazer's live camera preview with its face
+  // feedback box (green once both eyes are inside it), so the participant can
+  // fix their position/lighting first. The preview is hidden again afterwards.
+  function setCameraPreview(visible) {
+    try {
+      window.webgazer
+        .showVideo(visible)
+        .showFaceOverlay(visible)
+        .showFaceFeedbackBox(visible);
+    } catch { /* ignore */ }
+  }
+
+  function startPositioning() {
+    hudStatus.textContent = "Checking camera…";
+    position.classList.add("show");
+    // WebGazer pins its preview to the top-left corner; move it into the
+    // slot in our overlay and lift it above the overlay.
+    const container = document.getElementById("webgazerVideoContainer");
+    if (container) {
+      const rect = previewSlot.getBoundingClientRect();
+      container.style.left = rect.left + "px";
+      container.style.top = rect.top + "px";
+      container.style.zIndex = "125";
+    }
+    setCameraPreview(true);
+  }
+
+  function finishPositioning() {
+    setCameraPreview(false);
+    position.classList.remove("show");
+    hudStatus.textContent = "Calibrating…";
+    calib.classList.add("show");
+    buildCalibrationGrid();
+  }
+
   /* ---------------- calibration ---------------- */
 
   function buildCalibrationGrid() {
@@ -169,7 +258,9 @@
       cell.appendChild(dot);
       cell.dataset.count = "0";
 
-      dot.addEventListener("click", (e) => {
+      // The click target is the padded cell, not the 12px dot, so the small
+      // dot is still easy to hit.
+      cell.addEventListener("click", (e) => {
         e.stopPropagation();
         // Train WebGazer on the dot's true screen position (not the raw cursor
         // point), so every click is a clean calibration sample.
@@ -182,7 +273,7 @@
 
         const c = parseInt(cell.dataset.count, 10) + 1;
         cell.dataset.count = String(c);
-        dot.style.transform = "scale(1.25)";
+        dot.style.transform = "scale(1.5)";
         setTimeout(() => (dot.style.transform = "scale(1)"), 100);
         if (c >= CLICKS_PER_TARGET) cell.classList.add("done");
         if (targets.every((t) => parseInt(t.dataset.count, 10) >= CLICKS_PER_TARGET)) {
@@ -197,37 +288,72 @@
 
   /* ---------------- validation ---------------- */
 
-  // Show the central dot, sample predictions for a couple of seconds, and report
-  // the mean distance from the dot. Lets the user recalibrate before recording.
+  // Show each evaluation point (the same positions as calibration) in turn,
+  // sample predictions while it is visible, and report the mean distance from
+  // the points. Lets the user recalibrate before recording.
   function startValidation() {
     calib.classList.remove("show");
     validateResult.classList.remove("show");
     validateHint.style.visibility = "visible";
+    validateDot.style.display = "block";
     validate.classList.add("show");
+    validationAttempt += 1;
 
-    const rect = validateDot.getBoundingClientRect();
-    const targetX = rect.left + rect.width / 2;
-    const targetY = rect.top + rect.height / 2;
+    const positions = calibPositions();
+    const points = [];
+    const allErrors = [];
 
-    const samples = [];
-    const startAt = Date.now();
-    const sampleTimer = window.setInterval(async () => {
-      const elapsed = Date.now() - startAt;
-      let data = null;
-      try {
-        data = await window.webgazer.getCurrentPrediction();
-      } catch { /* ignore */ }
-      if (elapsed > VALIDATION_WARMUP_MS && data) {
-        samples.push(Math.hypot(data.x - targetX, data.y - targetY));
-      }
-      if (elapsed >= VALIDATION_MS) {
-        clearInterval(sampleTimer);
-        showValidationResult(samples);
-      }
-    }, VALIDATION_INTERVAL_MS);
+    function runPoint(index) {
+      const [xPct, yPct] = positions[index];
+      validateDot.style.left = xPct + "%";
+      validateDot.style.top = yPct + "%";
+      const rect = validateDot.getBoundingClientRect();
+      const targetX = rect.left + rect.width / 2;
+      const targetY = rect.top + rect.height / 2;
+
+      const errors = [];
+      const startAt = Date.now();
+      let finished = false;
+      const sampleTimer = window.setInterval(async () => {
+        let data = null;
+        try {
+          data = await window.webgazer.getCurrentPrediction();
+        } catch { /* ignore */ }
+        // The await above lets ticks overlap, so a late one may land after
+        // this point has already been closed.
+        if (finished) return;
+        const elapsed = Date.now() - startAt;
+        if (elapsed > VALIDATION_WARMUP_MS && data) {
+          errors.push(Math.hypot(data.x - targetX, data.y - targetY));
+        }
+        if (elapsed >= VALIDATION_POINT_MS) {
+          finished = true;
+          clearInterval(sampleTimer);
+          points.push({
+            point_index: index,
+            target_x: Math.round(targetX),
+            target_y: Math.round(targetY),
+            mean_error_px: errors.length
+              ? errors.reduce((a, b) => a + b, 0) / errors.length
+              : null,
+            sample_count: errors.length,
+          });
+          allErrors.push(...errors);
+          if (index + 1 < positions.length) {
+            runPoint(index + 1);
+          } else {
+            validateDot.style.display = "none";
+            storeValidation(points);
+            showValidationResult(allErrors, positions.length);
+          }
+        }
+      }, VALIDATION_INTERVAL_MS);
+    }
+
+    runPoint(0);
   }
 
-  function showValidationResult(samples) {
+  function showValidationResult(samples, pointCount) {
     validateHint.style.visibility = "hidden";
     const diag = Math.hypot(browserWidth, browserHeight);
 
@@ -242,7 +368,8 @@
       if (frac <= GOOD_FRAC) { grade = "Good"; cls = "good"; }
       else if (frac <= FAIR_FRAC) { grade = "Fair"; cls = "fair"; }
       else { grade = "Poor"; cls = "poor"; }
-      detail = "Average error: ~" + Math.round(meanPx) + " px (" +
+      detail = "Average error over " + pointCount + " points: ~" +
+        Math.round(meanPx) + " px (" +
         (frac * 100).toFixed(1) + "% of screen). " +
         (cls === "good"
           ? "You're good to go."
@@ -356,25 +483,55 @@
     hudStatus.textContent = "Loading eye tracker…";
     try {
       await loadWebGazer();
-      await createSession();
 
-      window.webgazer
-        .showVideo(false)
-        .showFaceOverlay(false)
-        .showFaceFeedbackBox(false)
-        .showPredictionPoints(false)
-        .applyKalmanFilter(true)   // smooth out prediction jitter
-        .setGazeListener(function (data) { moveGazeDot(data); })
-        .begin();
+      // begin() resolves once the webcam is delivering frames and rejects if
+      // the camera is blocked/busy. Wait for it (with a timeout, in case no
+      // frame ever arrives) so a dead camera is reported here instead of
+      // surfacing later as "No signal" after a full calibration.
+      let cameraTimeoutId = null;
+      try {
+        await Promise.race([
+          window.webgazer
+            .showVideo(false)
+            .showFaceOverlay(false)
+            .showFaceFeedbackBox(false)
+            .showPredictionPoints(false)
+            .applyKalmanFilter(true)   // smooth out prediction jitter
+            // WebGazer otherwise reloads calibration samples saved by earlier
+            // visits in this browser — a different sitting position, or a
+            // different person — and mixes them into the new model.
+            .saveDataAcrossSessions(false)
+            .setGazeListener(function (data) { moveGazeDot(data); })
+            .begin(),
+          new Promise((_, reject) => {
+            cameraTimeoutId = setTimeout(
+              () => reject(new Error("Camera start timed out")),
+              CAMERA_START_TIMEOUT_MS
+            );
+          }),
+        ]);
+      } catch (e) {
+        console.error(e);
+        showCameraError(e);
+        return;
+      } finally {
+        clearTimeout(cameraTimeoutId);
+      }
 
       // By default WebGazer trains on every mouse click AND mouse-move, which
       // biases the model toward the cursor. Drop the global listeners so it only
       // learns from our deliberate calibration clicks (via recordScreenPosition).
+      // (begin() adds them, so this must run after it has finished.)
       try { window.webgazer.removeMouseEventListeners(); } catch { /* ignore */ }
 
-      hudStatus.textContent = "Calibrating…";
-      calib.classList.add("show");
-      buildCalibrationGrid();
+      // Wipe any samples an earlier visit left in this browser's storage.
+      try { await window.webgazer.clearData(); } catch { /* ignore */ }
+
+      // Only create the session once the camera works, so failed starts don't
+      // leave empty sessions behind.
+      await createSession();
+
+      startPositioning();
 
       logIntervalId = window.setInterval(logPoint, 1000 / DATAPOINTS_PER_SECOND);
 	  flushTimerId = window.setInterval(() => flushCache(), FLUSH_INTERVAL_MS);
@@ -406,9 +563,13 @@
     validate.classList.remove("show");
     validateResult.classList.remove("show");
     try { window.webgazer.clearData(); } catch { /* ignore */ }
-    calib.classList.add("show");
-    buildCalibrationGrid();
+    // A poor result is most often a badly placed face, so check that first.
+    startPositioning();
   });
+
+  positionDoneBtn.addEventListener("click", finishPositioning);
+
+  cameraRetryBtn.addEventListener("click", () => window.location.reload());
 
   finishBtn.addEventListener("click", async () => {
     finishBtn.disabled = true;

@@ -90,36 +90,47 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-sy
 .btn-primary { background: #2f6fb0; color: #fff; }
 .btn-secondary { background: #e4e9f0; color: #52606d; }
 
+/* Face positioning: hint, a slot WebGazer's 320x240 camera preview is moved
+   into by JS, and a continue button. */
+#position { background: #e5e7eb; color: #1f2933; }
+#position .position-hint {
+  width: min(92vw, 560px); font-size: 15px; text-align: center; line-height: 1.5;
+}
+#previewSlot { width: 320px; height: 240px; background: #cbd0d6; border-radius: 6px; }
+
 /* Calibration + validation overlays fill the viewport so dots can reach the
-   true screen edges/corners, where webcam prediction is weakest. */
-#calib, #validate { justify-content: flex-start; }
+   true screen edges/corners, where webcam prediction is weakest. Opaque light
+   gray with 12px black targets, per Psarra et al. (JEMR 2026, 19, 99). */
+#calib, #validate { justify-content: flex-start; background: #e5e7eb; color: #1f2933; }
+/* The hint sits between the top and middle rows of dots so it never covers one. */
 #calib .hint, #validate .hint {
-  font-size: 15px; opacity: .92; text-align: center;
-  margin-top: 20px; max-width: 640px; line-height: 1.5;
+  position: fixed; top: 24%; left: 50%; transform: translateX(-50%);
+  width: min(92vw, 640px);
+  font-size: 15px; text-align: center; line-height: 1.5;
+  pointer-events: none;
 }
 
-/* Calibration dots are absolutely positioned by JS at edge/corner percentages. */
+/* Calibration dots are absolutely positioned by JS at grid percentages. The
+   cell is padded so the click area is larger than the visible 12px dot. */
 #calib .grid { position: fixed; inset: 0; }
-.target { position: absolute; transform: translate(-50%, -50%); user-select: none; }
+.target {
+  position: absolute; transform: translate(-50%, -50%);
+  padding: 10px; cursor: pointer; user-select: none;
+}
 .target > div {
-  width: 22px; height: 22px; border-radius: 999px;
-  background: #fff; opacity: .9;
-  box-shadow: 0 0 0 4px rgba(255,255,255,.25);
-  cursor: pointer; transition: transform .1s;
+  width: 12px; height: 12px; border-radius: 999px;
+  background: #000;
+  transition: transform .1s;
 }
-.target.done > div {
-  background: #4ade80;
-  box-shadow: 0 0 0 4px rgba(74,222,128,.35);
-}
+.target.done { visibility: hidden; }
 
-/* Validation: single central dot + result panel */
+/* Validation: one dot, moved between the grid positions by JS + result panel */
 #validateDot {
   position: fixed;
   top: 50%; left: 50%;
-  width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  width: 12px; height: 12px; margin: -6px 0 0 -6px;
   border-radius: 999px;
-  background: #f0b429;
-  box-shadow: 0 0 0 5px rgba(240,180,41,.3), 0 0 14px rgba(240,180,41,.8);
+  background: #000;
 }
 #validate .result {
   position: fixed;
