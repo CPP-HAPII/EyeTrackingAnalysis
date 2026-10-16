@@ -40,11 +40,33 @@
     </div>
   </div>
 
+  <!-- Camera error: shown when the webcam can't be started -->
+  <div id="cameraErrorBackdrop" class="overlay">
+    <div class="modal">
+      <h2>Camera problem</h2>
+      <p id="cameraErrorText"></p>
+      <div class="modal-actions">
+        <button id="cameraRetryBtn" class="btn btn-primary">Try again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Face positioning: live camera preview shown before calibration -->
+  <div id="position" class="overlay">
+    <div class="position-hint">
+      <b>Position your face:</b> sit so your face is inside the square in the
+      camera preview. The square turns green when both eyes are detected.
+      Stay in that position, with your head still, for the whole test.
+    </div>
+    <div id="previewSlot"></div>
+    <button id="positionDoneBtn" class="btn btn-primary">Continue</button>
+  </div>
+
   <!-- Calibration overlay -->
   <div id="calib" class="overlay">
     <div class="hint">
       <b>Calibration:</b> keep your head still and your eyes fixed on each dot
-      while you click it 5&times;. Do the corners too.
+      while you click it 5&times;. A dot disappears when it is done.
     </div>
     <div class="grid" id="grid"></div>
   </div>
@@ -52,7 +74,8 @@
   <!-- Validation overlay: measures how accurate the calibration actually is -->
   <div id="validate" class="overlay">
     <div class="hint" id="validateHint">
-      <b>Check:</b> stare at the dot in the center without moving your head.
+      <b>Check:</b> follow the dot with your eyes as it moves, without moving
+      your head. This takes about a minute.
     </div>
     <div id="validateDot"></div>
     <div id="validateResult" class="result">

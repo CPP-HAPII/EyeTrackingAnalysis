@@ -17,8 +17,9 @@ capture (WebGazer, browser)  ─►  FastAPI  ─►  SQLite (gaze.db)
 
 ## What it does
 
-1. **Capture** — consent → 9-point webcam calibration → your gaze is recorded
-   while you look at a sample page.
+1. **Capture** — consent → face positioning → 18-point webcam calibration →
+   18-point accuracy check → your gaze is recorded while you look at a sample
+   page.
 2. **Heatmap** — view the raw gaze density overlaid on the same page.
 3. **Fixations** — run the ST-DBSCAN pipeline to cluster gaze into fixations,
    shown as a heatmap with numbered look-order.
@@ -65,7 +66,7 @@ backend/
   requirements.txt
   utils/
     db/database.py           async SQLite engine (swap from the original MySQL)
-    db/models.py             gazepoint_sessions / gazepoint_data / fixation_points
+    db/models.py             gazepoint_sessions / gazepoint_data / fixation_points / validation_points
     db/schemas.py
     data_to_csv.py           \
     find_elbow.py             \  reused ST-DBSCAN fixation pipeline
@@ -87,6 +88,7 @@ frontend/
 |--------|-------------------------------|--------------------------------------|
 | POST   | `/api/session`                | create a gaze session                |
 | POST   | `/api/points`                 | batch-store gaze points              |
+| POST   | `/api/validation`             | store per-point calibration accuracy |
 | GET    | `/api/sessions`               | list sessions (+ point/fixation counts) |
 | GET    | `/api/session/{id}`           | session metadata                     |
 | GET    | `/api/points?session_id=`     | raw gaze points (pixels)             |
